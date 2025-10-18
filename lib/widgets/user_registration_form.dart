@@ -4,10 +4,10 @@ class UserRegistrationForm extends StatefulWidget {
   const UserRegistrationForm({super.key});
 
   @override
-  State<UserRegistrationForm> createState() => _UserRegistrationFormState();
+  State<UserRegistrationForm> createState() => UserRegistrationFormState();
 }
 
-class _UserRegistrationFormState extends State<UserRegistrationForm> {
+class UserRegistrationFormState extends State<UserRegistrationForm> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -17,15 +17,69 @@ class _UserRegistrationFormState extends State<UserRegistrationForm> {
   bool _isLoading = false;
   String _message = '';
 
+  // Proper email validation using regex
   bool isValidEmail(String email) {
-    return email.contains('@');
+    final emailRegex = RegExp(
+      r"^(?!.*\.\.)[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+    );
+    return emailRegex.hasMatch(email.trim());
   }
 
+  // Strong password validation
   bool isValidPassword(String password) {
+    // At least 8 characters
+    if (password.length < 8) return false;
+
+    // Contains at least one uppercase letter
+    if (!password.contains(RegExp(r'[A-Z]'))) return false;
+
+    // Contains at least one lowercase letter
+    if (!password.contains(RegExp(r'[a-z]'))) return false;
+
+    // Contains at least one digit
+    if (!password.contains(RegExp(r'[0-9]'))) return false;
+
+    // Contains at least one special character
+    if (!password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) return false;
+
     return true;
   }
 
+  String? getPasswordStrengthMessage(String password) {
+    if (password.isEmpty) return null;
+
+    List<String> missing = [];
+
+    if (password.length < 8) {
+      missing.add('at least 8 characters');
+    }
+    if (!password.contains(RegExp(r'[A-Z]'))) {
+      missing.add('an uppercase letter');
+    }
+    if (!password.contains(RegExp(r'[a-z]'))) {
+      missing.add('a lowercase letter');
+    }
+    if (!password.contains(RegExp(r'[0-9]'))) {
+      missing.add('a number');
+    }
+    if (!password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+      missing.add('a special character');
+    }
+
+    if (missing.isEmpty) return null;
+
+    return 'Password must contain ${missing.join(', ')}';
+  }
+
   Future<void> _submitForm() async {
+    // Validate form before submission
+    if (!_formKey.currentState!.validate()) {
+      setState(() {
+        _message = 'Please fix the errors above';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _message = '';
@@ -78,7 +132,7 @@ class _UserRegistrationFormState extends State<UserRegistrationForm> {
                   return 'Please enter your email';
                 }
                 if (!isValidEmail(value)) {
-                  return 'Please enter a valid email';
+                  return 'Please enter a valid email address';
                 }
                 return null;
               },
@@ -89,15 +143,19 @@ class _UserRegistrationFormState extends State<UserRegistrationForm> {
               decoration: const InputDecoration(
                 labelText: 'Password',
                 border: OutlineInputBorder(),
-                helperText: 'At least 8 characters with numbers and symbols',
+                helperText:
+                    'At least 8 characters with uppercase, lowercase, numbers and symbols',
+                helperMaxLines: 2,
+                errorMaxLines: 3,
               ),
               obscureText: true,
               validator: (value) {
                 if (value == null || value.isEmpty) {
                   return 'Please enter a password';
                 }
-                if (!isValidPassword(value)) {
-                  return 'Password is too weak';
+                final strengthMessage = getPasswordStrengthMessage(value);
+                if (strengthMessage != null) {
+                  return strengthMessage;
                 }
                 return null;
               },
