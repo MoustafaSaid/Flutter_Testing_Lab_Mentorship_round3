@@ -4,37 +4,39 @@ class WeatherDisplay extends StatefulWidget {
   const WeatherDisplay({super.key});
 
   @override
-  State<WeatherDisplay> createState() => _WeatherDisplayState();
+  State<WeatherDisplay> createState() => WeatherDisplayState();
 }
 
-class _WeatherDisplayState extends State<WeatherDisplay> {
-  WeatherData? _weatherData;
-  bool _isLoading = false;
-  String? _error;
-  bool _useFahrenheit = false;
-  String _selectedCity = 'New York';
+class WeatherDisplayState extends State<WeatherDisplay> {
+  WeatherData? weatherData;
+  bool isLoading = false;
+  String? error;
+  bool useFahrenheit = false;
+  String selectedCity = 'New York';
 
-  final List<String> _cities = ['New York', 'London', 'Tokyo', 'Invalid City'];
+  final List<String> cities = ['New York', 'London', 'Tokyo', 'Invalid City'];
 
+  // Fixed: Added +32 to the formula
   double celsiusToFahrenheit(double celsius) {
-    return celsius * 9 / 5;
+    return (celsius * 9 / 5) + 32;
   }
 
+  // Fixed: Corrected operator precedence
   double fahrenheitToCelsius(double fahrenheit) {
-    return fahrenheit - 32 * 5 / 9;
+    return (fahrenheit - 32) * 5 / 9;
   }
 
   // Simulate API call that sometimes returns null or malformed data
-  Future<Map<String, dynamic>?> _fetchWeatherData(String city) async {
+  Future<Map<String, dynamic>?> fetchWeatherData(String city) async {
     await Future.delayed(const Duration(seconds: 2));
 
     if (city == 'Invalid City') {
       return null;
     }
 
-    
+    // Simulate incomplete data
     if (DateTime.now().millisecond % 4 == 0) {
-      return {'city': city, 'temperature': 22.5}; 
+      return {'city': city, 'temperature': 22.5};
     }
 
     return {
@@ -49,26 +51,57 @@ class _WeatherDisplayState extends State<WeatherDisplay> {
     };
   }
 
-  Future<void> _loadWeather() async {
-    if (mounted) {
+  Future<void> loadWeather() async {
+    if (!mounted) return;
+
+    setState(() {
+      isLoading = true;
+      error = null;
+      weatherData = null;
+    });
+
+    try {
+      final data = await fetchWeatherData(selectedCity);
+
+      if (!mounted) return;
+
+      if (data == null) {
+        setState(() {
+          error = 'Failed to load weather data for $selectedCity';
+          isLoading = false;
+        });
+        return;
+      }
+
+      // Try to parse the data
+      weatherData = WeatherData.fromJson(data);
+
+      if (weatherData == null) {
+        setState(() {
+          error = 'Invalid weather data received';
+          isLoading = false;
+        });
+        return;
+      }
+
       setState(() {
-        _isLoading = true;
-        _error = null;
+        weatherData = weatherData;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        error = 'Error loading weather: ${e.toString()}';
+        isLoading = false;
       });
     }
-
-    
-    final data = await _fetchWeatherData(_selectedCity);
-    setState(() {
-      _weatherData = WeatherData.fromJson(data); 
-      _isLoading = false;
-    });
   }
 
   @override
   void initState() {
     super.initState();
-    _loadWeather();
+    loadWeather();
   }
 
   @override
@@ -85,24 +118,24 @@ class _WeatherDisplayState extends State<WeatherDisplay> {
               const SizedBox(width: 8),
               Expanded(
                 child: DropdownButton<String>(
-                  value: _selectedCity,
+                  value: selectedCity,
                   isExpanded: true,
-                  items: _cities.map((city) {
+                  items: cities.map((city) {
                     return DropdownMenuItem(value: city, child: Text(city));
                   }).toList(),
                   onChanged: (value) {
                     if (value != null) {
                       setState(() {
-                        _selectedCity = value;
+                        selectedCity = value;
                       });
-                      _loadWeather();
+                      loadWeather();
                     }
                   },
                 ),
               ),
               const SizedBox(width: 8),
               ElevatedButton(
-                onPressed: _loadWeather,
+                onPressed: isLoading ? null : loadWeather,
                 child: const Text('Refresh'),
               ),
             ],
@@ -115,22 +148,51 @@ class _WeatherDisplayState extends State<WeatherDisplay> {
               const Text('Temperature Unit:'),
               const SizedBox(width: 10),
               Switch(
-                value: _useFahrenheit,
+                value: useFahrenheit,
                 onChanged: (value) {
                   setState(() {
-                    _useFahrenheit = value;
+                    useFahrenheit = value;
                   });
                 },
               ),
-              Text(_useFahrenheit ? 'Fahrenheit' : 'Celsius'),
+              Text(useFahrenheit ? 'Fahrenheit' : 'Celsius'),
             ],
           ),
           const SizedBox(height: 16),
 
-          if (_isLoading && _error == null)
+          // Loading state
+          if (isLoading)
             const Center(child: CircularProgressIndicator())
-          
-          else if (_weatherData != null)
+          // Error state
+          else if (error != null)
+            Card(
+              color: Colors.red[50],
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 48,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      error!,
+                      style: const TextStyle(color: Colors.red, fontSize: 16),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(
+                      onPressed: loadWeather,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          // Success state
+          else if (weatherData != null)
             Card(
               elevation: 4,
               child: Padding(
@@ -141,7 +203,7 @@ class _WeatherDisplayState extends State<WeatherDisplay> {
                     Row(
                       children: [
                         Text(
-                          _weatherData!.icon,
+                          weatherData!.icon,
                           style: const TextStyle(fontSize: 48),
                         ),
                         const SizedBox(width: 16),
@@ -150,14 +212,14 @@ class _WeatherDisplayState extends State<WeatherDisplay> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _weatherData!.city,
+                                weatherData!.city,
                                 style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               Text(
-                                _weatherData!.description,
+                                weatherData!.description,
                                 style: const TextStyle(
                                   fontSize: 18,
                                   color: Colors.grey,
@@ -171,9 +233,9 @@ class _WeatherDisplayState extends State<WeatherDisplay> {
                     const SizedBox(height: 16),
                     Center(
                       child: Text(
-                        _useFahrenheit
-                            ? '${celsiusToFahrenheit(_weatherData!.temperatureCelsius).toStringAsFixed(1)}°F'
-                            : '${_weatherData!.temperatureCelsius.toStringAsFixed(1)}°C',
+                        useFahrenheit
+                            ? '${celsiusToFahrenheit(weatherData!.temperatureCelsius).toStringAsFixed(1)}°F'
+                            : '${weatherData!.temperatureCelsius.toStringAsFixed(1)}°C',
                         style: const TextStyle(
                           fontSize: 48,
                           fontWeight: FontWeight.bold,
@@ -184,14 +246,14 @@ class _WeatherDisplayState extends State<WeatherDisplay> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _buildWeatherDetail(
+                        buildWeatherDetail(
                           'Humidity',
-                          '${_weatherData!.humidity}%',
+                          '${weatherData!.humidity}%',
                           Icons.water_drop,
                         ),
-                        _buildWeatherDetail(
+                        buildWeatherDetail(
                           'Wind Speed',
-                          '${_weatherData!.windSpeed} km/h',
+                          '${weatherData!.windSpeed} km/h',
                           Icons.air,
                         ),
                       ],
@@ -200,13 +262,15 @@ class _WeatherDisplayState extends State<WeatherDisplay> {
                 ),
               ),
             )
-          
+          // Empty state (shouldn't normally happen)
+          else
+            const Center(child: Text('No weather data available')),
         ],
       ),
     );
   }
 
-  Widget _buildWeatherDetail(String label, String value, IconData icon) {
+  Widget buildWeatherDetail(String label, String value, IconData icon) {
     return Column(
       children: [
         Icon(icon, color: Colors.blue, size: 32),
@@ -238,15 +302,43 @@ class WeatherData {
     required this.icon,
   });
 
-  
-  factory WeatherData.fromJson(Map<String, dynamic>? json) {
-    return WeatherData(
-      city: json!['city'],
-      temperatureCelsius: json['temperature'].toDouble(),
-      description: json['description'],
-      humidity: json['humidity'], 
-      windSpeed: json['windSpeed'].toDouble(), 
-      icon: json['icon'], 
-    );
+  // Fixed: Proper null safety and error handling
+  static WeatherData? fromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+
+    try {
+      // Check required fields
+      if (!json.containsKey('city') || !json.containsKey('temperature')) {
+        return null;
+      }
+
+      // Helper function to safely parse int
+      int parseIntOrDefault(dynamic value, int defaultValue) {
+        if (value == null) return defaultValue;
+        if (value is int) return value;
+        if (value is num) return value.toInt();
+        return defaultValue; // For strings or other invalid types
+      }
+
+      // Helper function to safely parse double
+      double parseDoubleOrDefault(dynamic value, double defaultValue) {
+        if (value == null) return defaultValue;
+        if (value is double) return value;
+        if (value is num) return value.toDouble();
+        return defaultValue; // For strings or other invalid types
+      }
+
+      return WeatherData(
+        city: json['city'] as String,
+        temperatureCelsius: (json['temperature'] as num).toDouble(),
+        description: json['description'] as String? ?? 'N/A',
+        humidity: parseIntOrDefault(json['humidity'], 0),
+        windSpeed: parseDoubleOrDefault(json['windSpeed'], 0.0),
+        icon: json['icon'] as String? ?? '🌤️',
+      );
+    } catch (e) {
+      // Return null if parsing fails
+      return null;
+    }
   }
 }
